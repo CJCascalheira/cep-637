@@ -1,0 +1,34 @@
+---
+title: "Assignment 1"
+author: "Cory J. Cascalheira"
+date: "1/26/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment Instructions
+
+In a Word document, respond to the following and upload via Canvas:
+
+1. Download the rollercoasters.sav file and open it in SPSS (or import it into R)
+2. Write up a response to the following question, using an ANOVA: Do roller coasters that have different excitement ratings differ in their max speed?
+    * Make sure to describe center, spread, and shape of the distribution of the variables (Analyze, Descriptives, Explore may be helpful here)
+    * Are assumptions of ANOVA met? (What are the assumptions? You can look in your book for this, or also use Laerd Statistics (Links to an external site.))
+    * Include all relevant output from the ANOVA in your response to the question
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
