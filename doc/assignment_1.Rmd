@@ -1,15 +1,19 @@
 ---
 title: "Assignment 1"
 author: "Cory J. Cascalheira"
-date: "1/26/2021"
-output: word_document
+date: "01/27/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
-## Assignment Instructions
+<br>
+
+# Assignment Instructions
 
 In a Word document, respond to the following and upload via Canvas:
 
@@ -19,16 +23,278 @@ In a Word document, respond to the following and upload via Canvas:
     * Are assumptions of ANOVA met? (What are the assumptions? You can look in your book for this, or also use Laerd Statistics (Links to an external site.))
     * Include all relevant output from the ANOVA in your response to the question
 
-```{r cars}
-summary(cars)
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(tidyverse)
+library(rio)
+library(lsr)
+library(pander)
+
+# Import
+roller <- import("../data/rollercoasters.sav")
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
 ```
 
-## Including Plots
+# ANOVA: Tests of Difference
 
-You can also embed plots, for example:
+A helpful R cookbook for executing one-way ANOVAs [can be found here](http://www.sthda.com/english/wiki/one-way-anova-test-in-r). I also briefly consulted Fields et al. (2012). A one-way ANOVA is appropriate because (a) the independent variable (IV) is discrete with three or more groups, (b) the dependent variable (DV) is continuous, and (c) there are no more than two variables, one IV and one DV. It is reasonable to assume that the excitement ratings are independent groups (i.e., between subjects procedure).
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+It can be helpful to recode the IV as a factor before executing the one-way ANOVA. Note that the effect size $\eta^2$ is calculated using the type II sum of squares because [the groups are unbalanced](https://www.rdocumentation.org/packages/lsr/versions/0.5/topics/etaSquared).
+
+```{r}
+# Factor recoding
+roller_1 <- roller %>%
+  mutate(excitement_rating = as.factor(excitement_rating))
+
+# Factors in correct order
+roller_1$excitement_rating <- ordered(roller_1$excitement_rating, 
+                                      levels = c("Low", "Medium", "High", "Very High"))
+
+# Execute ANOVA
+roller_aov <- aov(max_speed ~ excitement_rating, data = roller_1)
+
+# Print ANOVA results
+summary(roller_aov)
+
+# Balance of groups
+roller_1 %>%
+  count(excitement_rating)
+
+# Calculate effect size
+etaSquared(roller_aov, type = 2)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The omnibus test is significant, so pairwise comparisons using a Bonferroni-corrected alpha are appropriate. At this point, the calculation of descriptive statistics will be useful for reporting.
+
+```{r}
+# Describe the sample
+roller_1 %>%
+  group_by(excitement_rating) %>%
+  summarize(
+    M = mean(max_speed),
+    SD = sd(max_speed),
+    n = n()
+  )
+
+# Post-hoc pairwise comparisons
+pairwise.t.test(roller_1$max_speed, roller_1$excitement_rating,
+                p.adjust.methods = "bonferroni")
+```
+
+Notably, the *p* adjustment method defaults to Holm, which may indicate a problem with the assumptions (i.e., group size). Nonetheless, without investigating assumptions yet, the results can be reported.
+
+The one-way ANOVA tested the null hypothesis that there was no difference in maximum speed between roller coasters with four different excitement ratings: low, medium, high, and very high. The overall results were significant, *F*(3, 138) = 14.24, *p* < .001, $\eta^2$ = .24. Pairwise comparisons using the Holm-adjustment method showed three significant differences between very high (*M* = 56.42, *SD* = 14.84) and low (*M* = 31.5, *SD* = 3.54) excitement ratings, *p* < .001; very high and medium (*M* = 37.92, *SD* = 4.38) excitement ratings, *p* < .001; and very high and high (*M* = 43.03, *SD* = 7.25) excitement ratings, *p* < .001. None of the other pairwise comparisons were significant. 
+
+## Describe the Distributions
+
+The **center** of the distributions is given by the mean, median, and mode. These values are presented in a table. Since R does not have a built-in function for the mode, [one is provided](https://www.tutorialspoint.com/r/r_mean_median_mode.htm). When these three values are close to each other, there is evidence of normality (Rovai et al., 2014). Unsurprisingly, the mean, median, and mode are closest for the distribution of maximum speed scores for the High excitement rating, which is reasonable since the number of observations is greatest for this subset of scores (*n* = 116). 
+
+```{r}
+# Funciton for mode
+# Create the function.
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Calculate measures of center
+roller_1 %>%
+  group_by(excitement_rating) %>%
+  summarize(
+    Mean = mean(max_speed),
+    Median = median(max_speed),
+    Mode = getmode(max_speed)
+  ) %>%
+  rename(Rating = excitement_rating) %>%
+  pandoc.table()
+```
+
+The **spread** (i.e., dispersion) of the distributions can be given by the range, interquartile range (IQR), variance, and standard deviation. These values are presented in a table, demonstrating that the spread increases along with the ratings. That is, the smallest amount of spread exists in the distribution of maximum speed for Low excitement rating while the largest amount of spread is in the distribution of maximum speed for Very High excitement rating.  
+
+```{r}
+# Table of dispersion
+roller_1 %>%
+  group_by(excitement_rating) %>%
+  summarize(
+    Max = max(max_speed),
+    Min = min(max_speed),
+    Range = Max - Min,
+    IQR = IQR(max_speed),
+    Variance = var(max_speed),
+    SD = sd(max_speed)
+  ) %>%
+  rename(Rating = excitement_rating) %>%
+  pandoc.table()
+```
+
+The **shape** of the distributions can be visualized with boxplots, histograms, and density curves.
+
+```{r}
+# Show a boxplot
+roller_1 %>%
+  ggplot(aes(x = excitement_rating, y = max_speed)) +
+    geom_boxplot() +
+    apa_theme
+
+# Show a histogram of each distribution
+roller_1 %>%
+  ggplot(aes(x = max_speed)) +
+    geom_histogram() +
+    facet_wrap(~ excitement_rating) +
+    apa_theme
+
+# Show the density curve of each distribution
+roller_1 %>%
+  ggplot(aes(x = max_speed, fill = excitement_rating)) +
+    geom_density(alpha = 0.5) +
+    apa_theme
+```
+
+Based on a visual inspection of the boxplot, the Medium, High, and Very High excitement ratings have outliers, which will skew the distributions. A visual inspection provided additional insights on the distribution of maximum speed:
+
+1. For the Low excitement rating, the distribution appears bimodal, symmetric, and not normal, which is expected given that the distribution is comprised of two values. 
+2. For the Medium excitement rating, the distribution approaches a bimodal shape due to the outliers. Based on the histogram alone, the distribution could be considered unimoda and asymmetric with a negative skew. According to the density plot, the distribution seems leptokurtic. 
+3. For the High excitement rating, the distribution approaches a unimodal, symmetric, bell shape, although there is evidence of positive skew. Visually, the distribution seems mesokurtic. 
+4. For the Very High excitement rating, the distribution might be considered unimodal and asymmetric, although this is unclear because the outliers seem to produce a second modal feature in the density plot. There is a clear positive skew. Kurtosis values, once calculated, might support heavy-tailedness (Rovai et al., 2014). 
+
+# ANOVA: Assumptions
+
+Whether these results are statistically valid partially depends on the tenability of the assumptions (Rovai et al., 2014). A description of the center, spread, and shape of the distributions revealed several concerns. 
+
+The assumptions of a between-subjects, one-way ANOVA are (Fields et al., 2012; Rovai et al., 2014):
+
+1. characteristics of variables;
+2. independence;
+3. group-level univariate normality;
+4. homogeneity of variance; and
+5. sample size.
+
+## Characteristics of Variables
+
+The variables meet this assumption. The IV is discrete with more than three levels. The DV is continuous, existing at least at the interval level because the interval between 36 mph and 37 mph is the same as the interval between 88 mph and 89 mph. The distance between values make sense numerically. The DV is probably at the ratio level of measurement because the maximum speed of a broken roller coaster would be zero. Although reported as an integer in this dataset, the maximum speed also likely shifts slightly for each ride. 
+
+## Independence
+
+Although we would need more information to decide on this assumption definitively, it is reasonable to suggest that the excitement ratings were made by different people.
+
+Of course, online ratings can have a crowd effect (i.e., a person may rate similar to others for social desirability if ratings are posted). However, for the sake of this exercise, I assumed that the roller coasters were independently rated.
+
+## Group-Level Univariate Normality
+
+There are several ways to assess univariate normality. The assumption is tenable when a package of evidence suggests normality.
+
+```{r}
+# Vector of values
+ratings <- as.character(unique(roller_1$excitement_rating))
+
+# Describe the data
+for (i in 1:length(ratings)) {
+  
+  # Select the rating
+  a <- roller_1 %>%
+    filter(excitement_rating == ratings[i])
+  
+  # Describe the maximum speed
+  b <- describe(a$max_speed)
+  print(b)
+}
+```
+
+The skewness is close to zero for the Medium and Low excitement ratings, but closer to 1 for the High and Very High excitement ratings, suggesting positive skew. These skew values are acceptable, especially for a robust proecedure like an ANOVA (Rovai et al., 2014). The kurtosis value for the Very High excitement rating is close to zero, which matches the mesokurtic observation made earlier. The kurtosis for the High excitement rating is closer to 1, suggesting a leptokurtic distribution; for the Medium rating, the kurtosis is close to -1, suggesting a platykurtic distribution. Nonetheless, these kurtosis values are acceptable. The final kurtosis value suggests non-normality because it is less than -2 (Rovai et al., 2014).
+
+Q-Q plots can be examined.
+
+```{r}
+# Subset the data frame
+low <- roller_1 %>%
+  filter(excitement_rating == "Low")
+
+medium <- roller_1 %>%
+  filter(excitement_rating == "Medium")
+
+high <- roller_1 %>%
+  filter(excitement_rating == "High")
+
+vh <- roller_1 %>%
+  filter(excitement_rating == "Very High")
+
+# Q-Q plots
+qqPlot(low$max_speed)
+qqPlot(medium$max_speed)
+qqPlot(high$max_speed)
+qqPlot(vh$max_speed)
+```
+
+A visual inspection of the Q-Q plots indicates non-normality for the distribution of maximum speed scores for the Low, Medium, and Very High excitement ratings because the data are asymmetrical along the diagonal line. There is also some asymmetry in the Q-Q plot of maximum speed scores for the High excitement rating, namely, in the upper-right quadrant of the graph.
+
+Formal tests of normality can be conducted as well. The Shapiro-Wilk test is appropriate for *n* < 50 (i.e., Low, Medium, Very High). When *n* > 50, the Kolmogorov-Smirnov (KS) test is preferred (i.e., High). Note that the Shapiro-Wilk test cannot be conducted on a sample of *n* < 3, so it will not be conducted for the Low excitement rating. 
+
+```{r}
+# Remove the Low excitement rating
+roller_2 <- roller %>%
+  filter(!(excitement_rating %in% c("Low", "High")))
+
+# Shapiro-Wilk tests
+by(roller_2$max_speed, roller_2$excitement_rating, shapiro.test)
+
+# KS test
+ks.test(x = vh$max_speed, y = "pnorm")
+```
+
+Results from the Shapiro-Wilk test yielded evidence for this distribution of maximum speed scores for the Medium rating, *W* = 0.94, *p* = .50, but not the Very High rating, *W* = 0.70, *p* < .001. The KS test yielded evidence for a non-normal distribution of maximum speed for the Very High rating, *D*(12) = 1, *p* < .001.
+
+In summary, the distribution of maximum speed scores:
+
+1. for the Low excitement rating is probably not normal;
+2. for the Medium excitement rating is somewhat normal, but probably not normal enough given the small sample;
+3. for the High excitement rating is probably normal; and
+4. for the Very High excitement rating is probably not normal. 
+
+## Homogeneity of Variance
+
+Levene's test provides evidence for the equality of variances. Since the distribution of maximum speed for three of the excitement ratings is probably not normal, Levene's test will be executed using [the median will be used](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm).
+
+```{r}
+# Levene's test
+leveneTest(roller_1$max_speed, 
+           group = roller_1$excitement_rating, 
+           center = median)
+```
+
+The variances among the different excitement ratings were similar, *F*(3, 138) = 2.46, *p* = .07.
+
+## Sample Size
+
+The sample sizes are not equal across groups, which may increase the Type I error rate (Rovai et al., 2014). Thus, it was likely that the one-way ANOVA returned false-positive significance.
+
+```{r}
+# Evidence of unequal sample sizes
+roller_1 %>%
+  count(excitement_rating)
+```
+
+In summary, there is evidence of assumption violation. I would probably not trust the results of this one-way ANOVA because (a) some of group-level distributions are not normal and (b) the sample sizes are quite variable. 
+
+# References
+
+Field, A., J. Miles, & Z. Field. (2012). *Discovering statistics using R*. SAGE Publications Ltd.
+
+Rovai, A. P., J. D. Baker, & M. K. Ponton. (2014). *Social science research design and statistics: A practitioner’s guide to research methods and IBM SPSS analysis* (2nd ed). Watertree Press.
