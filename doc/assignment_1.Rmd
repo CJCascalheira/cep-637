@@ -277,9 +277,14 @@ Levene's test provides evidence for the equality of variances. Since the distrib
 leveneTest(roller_1$max_speed, 
            group = roller_1$excitement_rating, 
            center = median)
+
+# Compare to centering on the mean
+leveneTest(roller_1$max_speed, 
+           group = roller_1$excitement_rating, 
+           center = mean)
 ```
 
-The variances among the different excitement ratings were similar, *F*(3, 138) = 2.46, *p* = .07.
+The variances among the different excitement ratings were similar when centered on the median, *F*(3, 138) = 2.46, *p* = .07, but significantly different when centered on the mean, *F*(3, 138) = 5, *p* = .002. Given that the sample sizes are quite diverse, it does not seem to make sense that the variances would be equal.
 
 ## Sample Size
 
@@ -291,7 +296,7 @@ roller_1 %>%
   count(excitement_rating)
 ```
 
-In summary, there is evidence of assumption violation. I would probably not trust the results of this one-way ANOVA because (a) some of group-level distributions are not normal and (b) the sample sizes are quite variable. 
+In summary, there is evidence of assumption violation. I would probably not trust the results of this one-way ANOVA because (a) some of group-level distributions are not normal, (b) the sample sizes are quite variable, and (c) there is evidence of unequal variances when the distributions are centered on the mean. 
 
 # References
 
