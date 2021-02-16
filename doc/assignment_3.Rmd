@@ -1,0 +1,197 @@
+---
+title: "Assignment 3"
+author: "Cory J. Cascalheira"
+date: "02/16/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>
+
+# Assignment Instructions
+
+1. Write up a response to the following question, using a linear regression: What influence, if any, does socioeconomic status (ESCS), gender (ST04Q01), and differences between students' home language and that of the test (ST25Q01) have on students' mathematics achievement (PV1MATH). Don't forget to re-code gender and language variables. Also, after class on Monday, I realized that I accidentally coded gender wrong. I though male was 1 and female was 2, but that is backward: female =1 and male = 2, so we interpreted the regression coefficient backwards from what we should have.
+    * Are assumptions of linear regression met?
+        * Were data randomly collected?
+        * Are individuals independent?
+        * Are both the dependent variables (DV) and the independent variable (IV) continuous variables?
+        * Are both DVs and the IV normally distributed?
+        * Are residuals normally distributed?
+        * Is there essentially no relationship between standardized residuals and the predicted variable?
+    * Is the overall model statistically significant? (report ANOVA results, R, R2--we will talk more about this)
+    * Are the ESCS and gender coefficients statistically significant? (report coefficient estimate and interpret it's meaning, t statistic, p value, confidence interval)
+        * If it is statistically significant, is it practically significant?
+
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(tidyverse)
+library(rio)
+
+# Import
+pisa <- import("../data/2012 PISA multiple countries selected variables.sav") %>%
+  as_tibble
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+## Assumption Checking
+
+An evaluation of assumptions is helpful.
+
+### Were data randomly collected?
+
+Yes. [According to OECD](https://www.oecd.org/pisa/pisaproducts/SAMPLING-IN-PISA.pdf), the organization that administers the PISA, a stratified two-stage sample design is used and students have equal probability within schools to be part of the sample. 
+
+### Are individuals independent?
+
+Wording for this answer is borrowed from Assignment 2, where relevant. Theoretically, we can assume that the scores on one test do not autocorrelate with the scores on a subsequent test (Rovai et al., 2014). For instance, assuming that students are not cheating, then Student A's answers probably do not depend on Student B's answers. At the country level, we would expect that the scores for each country do not automatically correlate with the scores of countries who took the test first. 
+
+Notably, however, we might expect that scores within the same school to be related because the students engaged in a similar curriculum taught by a set of teachers. Similarly, we might expect scores to be related within countries. For example, the Common Core standards for math education likely operate as an outside influence on student math achievement within the United States (i.e., all students received a similar education). Thus, even though random selection was used, there is evidence of non-independent observations at the school and country levels, which may affect individual student data.
+
+Another method of verifying this assumption is the Durbin Watson test (Field et al., 2012). 
+
+First, we need to transform gender and language into a dummy variables. Next, we can define the model. Finally, we can execute the Durbin Watson test.
+
+```{r}
+# Gender: 0 = female, 1 = male
+pisa$gender <- pisa$ST04Q01 - 1
+table(pisa$gender)
+
+# Language: 0 = same, 1 = other
+pisa$language <- pisa$ST25Q01 - 1
+table(pisa$language)
+
+# Define the linear regression
+model <- lm(PV1MATH ~ ESCS + gender + language, data = pisa)
+
+# Check independence of observations
+durbinWatsonTest(model)
+```
+
+Given that the D-W statistic is closer to 1 than 2 (i.e., 1.46) and the test was significant (Field et al., 2012), there is evidence of autocorrelation and, thus, the assumption of independent observations is not tenable. 
+
+### Are both the dependent variables (DV) and the independent variable (IV) continuous variables?
+
+This assumption is not exactly tenable. Socioeconomic status and math achievement scores are continuous, but gender and language are dichotomous. However, multiple regression can still be executed with dummy coded dichotomous values (Rovai et al., 2014). Therefore, the variables are appropriate for this model after a transformation of gender and language. 
+
+```{r}
+# ESCS - evidence of continuous level of measurement 
+hist(pisa$ESCS)
+length(unique(pisa$ESCS))
+
+# PV1MATH - evidence of continuous level of measurement 
+hist(pisa$PV1MATH)
+length(unique(pisa$PV1MATH))
+
+# Gender - evidence of discrete level of measurement 
+hist(pisa$gender)
+length(unique(pisa$gender))
+
+# Language - evidence of discrete level of measurement 
+hist(pisa$language)
+length(unique(pisa$language))
+```
+
+### Are both DVs and the IV normally distributed?
+
+The variables are probably normal enough given the large sample size, even though normality is not strictly tenable.
+
+That is, the histograms above provide visual evidence for and against normality. Gender and language are binomial distributions and are neither symmetrical nor bell-shaped; however, dichotomous predictors can be used in multiple regression when they are dummy coded to 0 and 1 (Rovai et al., 2014). Socioeconomic status appears negatively skewed, but is probably normal enough given that the sample size is large (*N* = 65,535). Math achievement scores appear symmetrical and bell-shaped. 
+
+### Are residuals normally distributed?
+
+Based on a visual inspection of the Q-Q plots, the residuals of:
+* ESCS are not normally distributed;
+* PV1MATH are normally distributed;
+* Gender are not normally distributed; and
+* Language are not normally distributed.
+
+```{r}
+# Q-Q plot of ESCS
+qqPlot(pisa$ESCS)
+
+# Q-Q plot of PV1MATH
+qqPlot(pisa$PV1MATH)
+
+# Q-Q plot of gender
+qqPlot(pisa$gender)
+
+# Q-Q plot language
+qqPlot(pisa$language)
+```
+
+### Is there essentially no relationship between standardized residuals and the predicted variable?
+
+We can examine the relationship between residuals and the predicted values graphically. Since a visual inspection of the fitted values vs. residuals plot is randomly distributed around the zero line and does not appear cone-like (Field et al., 2012), there appears to be no evidence of heteroscedasticity (i.e., variance of the residuals is not the same for all levels of the predictor; Rovai et al., 2014). Therefore, the data appear to meet the assumption of linearity. 
+
+The residuals themselves seem normally distributed as evidence by the histogram and Q-Q plot. 
+
+In summary, there appears to be no relationship between the the standardized residuals and the predicted variable, math achievement.
+
+```{r}
+# Create plots
+par(mfrow = c(2, 2))
+plot(model)
+
+# Remove missing values
+pisa %>%
+  filter(!is.na(PV1MATH), !is.na(gender), !is.na(ESCS), !is.na(language)) %>%
+  # Create a plot of standarized residuals vs. fitted values only
+  ggplot(aes(model$fitted.values, rstandard(model))) +
+    geom_point() +
+    geom_smooth(method = "lm", colour = "Blue") + 
+    labs(x = "Fitted Values", y = "Residuals") +
+    apa_theme
+
+# Histogram of standardized residuals
+hist(rstandard(model))
+```
+
+## Significance
+
+Summarize the model to check for significance. 
+
+```{r}
+# Summary of the model
+summary(model)
+
+# Confidence intervals
+confint(model)
+
+# Descriptive statistics
+pisa %>%
+  select(PV1MATH, ESCS, gender, language) %>%
+  describe()
+```
+
+## Answer the Question
+
+Results from the multiple regression were significant, *F*(3, 63,209) = 6,276, *p* < .001, and the model explained 22.95% of the variance in math achievement. All of the variables were significant predictors. Socioeconomic status (*t* = 135.33, *p* < .001) significantly contributed to the variance in math achievement, indicating that for every one unit increase in standardized socioeconomic status, a student's score on the math achievement assessment would increase by 35.69 points (95% CI [35.18, 36.21]). Gender (*t* = 11.12, *p* < .001) and language (*t* = 7.95, *p* < .001) were also significant predictors, but the practical significance was limited: being male (versus female) was associated with a 7.32 point increase in math achievement (95% CI [6.03, 8.62]) and having a native language that was different from the test (versus the same) was associated with a 8.91 point increase in math achievement (95% CI [6.71, 11.11]). 
+
+# References
+
+Field, A., J. Miles, & Z. Field. (2012). *Discovering statistics using R*. SAGE Publications Ltd.
+
+Rovai, A. P., J. D. Baker, & M. K. Ponton. (2014). *Social science research design and statistics: A practitioner’s guide to research methods and IBM SPSS analysis* (2nd ed). Watertree Press.
