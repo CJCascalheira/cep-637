@@ -1,0 +1,131 @@
+---
+title: "Assignment 4"
+author: "Cory J. Cascalheira"
+date: "03/04/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>
+
+# Assignment Instructions
+
+Please complete the following:
+
+1. Conduct a linear regression model for the following: PV1MATH = Intercept + ESCS\*X1 + Gender\*X2 + LANG\*X3 + ENJOYMATH\*X4
+
+2. When you conduct the linear regression, under Options, check the box next to Collinearity Diagnostics
+
+3. Include interpretation of the collinearity diagnostics (VIF and Tolerance) in your write up.
+
+I will be posting a video soon about what these mean. They are also discussed in Field (2018).
+
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(tidyverse)
+library(rio)
+
+# Import
+pisa <- import("../data/2012 PISA multiple countries selected variables.sav") %>%
+  as_tibble
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+## Recode Data
+
+First, I recoded the data to facilicate coding and interpretation.
+
+```{r}
+# Rename pisa
+pisa_1 <- pisa %>%
+  rename(country = CNT, language = ST25Q01, enjoy_math = ST29Q04,
+         gender = ST04Q01, math_career = ST48Q05, applied_math = ST76Q01,
+         solve_equation = ST37Q05, math_score = PV1MATH, ses = ESCS)
+
+# Recode dichotomous values
+pisa_2 <- pisa_1 %>%
+  mutate(
+    # 0 = same; 1 = different
+    language = recode(language, `1` = 0, `2` = 1),
+    # 0 = male; 1 = female
+    gender = recode(gender, `1` = 0, `2` = 1),
+    # Recode enjoy math so increasing numbers mean increased enjoyment
+    enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
+  )
+pisa_2
+```
+
+## Assumption Checking
+
+Other major assumptions (e.g., normality, linearity) were assumed met since we have worked with this dataset several times before.
+
+### Collinearity
+
+Collinearity is a subset of multicollinearity applied to two predictors (Field et al., 2012). Multicollinearity occurs when two or more predictors are highly correlated within a regression model. As values of collinearity increase, problems are introduced into the model, such as:
+
+* unstable beta weights, which might fit the sample but not represent the population;
+* less contribution to multiple correlation (i.e., *R*) and variance explained because collinear variables share too much common variance; and
+* difficulty assessing which predictors are most important.
+
+First, we need to specify the model.
+
+```{r}
+# Create the model
+model <- lm(math_score ~ ses + gender + language + enjoy_math, data = pisa_2)
+```
+
+The variance inflation factor (VIF) is a measure of "whether a predictor has a strong linear relationship with other predictor(s)" (Field et al., 2012, p. 276). Values of 10 are problematic. If the average VIF is greater than 1, then multicollinearity is likely a problem. 
+
+Tolerance, according to Field and colleagues, is the reciprocal of VIF. Problems occurs when tolerance is less than 0.1 and multicollinearity is more likely a problem when tolerance is less than 0.2.
+
+```{r}
+# Check the variance inflation factor (VIF)
+vif(model)
+
+# Average VIF
+mean(vif(model))
+
+# Tolerance
+1 / vif(model)
+```
+
+None of the above values reached the thresholds suggested by Field et al. (2012), therefore multicollinearity is likely not a problem. The average VIF is barely greater than 1.
+
+# Interpretation
+
+```{r}
+# Summarize the model
+summary(model)
+
+# Confidence intervals
+confint(model)
+```
+
+Results from the multiple regression were significant, *F*(4, 41,676) = 3,304, *p* < .001, and the model explained 24.07% of the variance in math achievement. All of the variables were significant predictors. Socioeconomic status (*t* = 113.05, *p* < .001) significantly contributed to the variance in math achievement, indicating that for every one unit increase in standardized socioeconomic status, a student's score on the math achievement assessment would increase by 36.5 points (95% CI [35.87, 37.13]). Gender (*t* = 9.08, *p* < .001) and language (*t* = 10.06, *p* < .001) were also significant predictors, but the practical significance was limited: being female (versus male) was associated with a 7.28 point increase in math achievement (95% CI [5.71, 8.85]) and having a native language that was different from the test (versus the same) was associated with a 10.06 point increase in math achievement (95% CI [7.39, 12.73]). Finally, enjoyment of math exhibited a significant relationship with math achievement (*t* = 16.15, *p* < .001), indicating that participants tended to score 7.15 points higher (95% CI [6.28, 8.05]) for every one unit increase in math enjoyment. Again, math enjoyment is not considered practically significant given the scale of math achievement. 
+
+# References
+
+Field, A., J. Miles, & Z. Field. (2012). *Discovering statistics using R*. SAGE Publications Ltd.
