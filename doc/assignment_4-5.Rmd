@@ -123,7 +123,11 @@ None of the above values reached the thresholds suggested by Field et al. (2012)
 
 ## Part Correlations
 
-A part correlation (i.e., a semi-partial correlation) is the *unique* correlation after overlapping association between two variables is removed. Conceptually, the procedure carves out a "part" of a zero-order correlation, which we can think of as a "normal" correlation (i.e., Pearson's Product Moment Correlation). 
+A part correlation (i.e., a semi-partial correlation) is the *unique* correlation after overlapping association between two variables is removed. Conceptually, the procedure carves out a "part" of the multiple correlation coefficient; when the part correlation is squared, it carves out the variance explained (i.e., the multiple R^2) by the unique predictor.
+
+Partial is like a relative frequency. It is out of 100% of multiple R^2. 
+
+Whereas the part correlation carves out a part of the multiple R^2. For example, if the R^2 is 0.241 and the part correlation for SES is .483, then the squared value of the part correlation is 0.231, which is in the same units as multiple R^2. 
 
 ```{r}
 # Select the variables in the model
@@ -160,7 +164,7 @@ round(part$estimate[5,1]^2, 4) * 100
 
 Results from the multiple regression were significant, *F*(4, 41,676) = 3,304, *p* < .001, and the model explained 24.07% of the variance in math achievement. All of the variables were significant predictors. Socioeconomic status (*t* = 113.05, *p* < .001) significantly contributed to the variance in math achievement, indicating that for every one unit increase in standardized socioeconomic status, a student's score on the math achievement assessment would increase by 36.5 points (95% CI [35.87, 37.13]). Gender (*t* = 9.08, *p* < .001) and language (*t* = 10.06, *p* < .001) were also significant predictors, but the practical significance was limited: being female (versus male) was associated with a 7.28 point increase in math achievement (95% CI [5.71, 8.85]) and having a native language that was different from the test (versus the same) was associated with a 10.06 point increase in math achievement (95% CI [7.39, 12.73]). Finally, enjoyment of math exhibited a significant relationship with math achievement (*t* = 16.15, *p* < .001), indicating that participants tended to score 7.15 points higher (95% CI [6.28, 8.05]) for every one unit increase in math enjoyment. Again, math enjoyment is not considered practically significant given the scale of math achievement. 
 
-Partial correlations were conducted to examine the unique contributions to the overall variance in math scores. Results indicated that standardized socioeconomic status explained `r round(part$estimate[2,1]^2, 4) * 100`% of the variance in math achievement, speaking a language different from the test explained `r round(part$estimate[3,1]^2, 4) * 100`%, student enjoyment of math explained `r round(part$estimate[4,1]^2, 4) * 100`%, and being female explained `r round(part$estimate[5,1]^2, 4) * 100`%. Therefore, only socioeconomic status explained a meaningful amount of the variance in math achievement. 
+Part correlations were conducted to examine the unique contributions to the overall variance in math scores. Part correlations were squared to determine the unique variance. Results indicated that standardized socioeconomic status explained `r round(part$estimate[2,1]^2, 4) * 100`% of the variance in math achievement, speaking a language different from the test explained `r round(part$estimate[3,1]^2, 4) * 100`%, student enjoyment of math explained `r round(part$estimate[4,1]^2, 4) * 100`%, and being female explained `r round(part$estimate[5,1]^2, 4) * 100`%. Therefore, only socioeconomic status explained a meaningful amount of the variance in math achievement. 
 
 # References
 

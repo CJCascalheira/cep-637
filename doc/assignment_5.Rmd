@@ -1,0 +1,258 @@
+---
+title: "Assignment 4.5"
+author: "Cory J. Cascalheira"
+date: "03/13/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>
+
+# Assignment Instructions
+
+**Important Note**: Stepwise methods of model selection are generally frowned upon by the statistics community. It is viewed similar to what has been called "p-hacking." However, they can sometimes be helpful when doing exploratory analysis. It is more important to have theoretical reasons for model specification, and model building techniques, such as either starting with a full model as recommended by theory and removing things based on output, or starting with the most basic model and iteratively adding variables as per theory, are preferred over things like stepwise methods.
+
+First, compare the following hierarchical models (meaning 1 is nested within 2 because it contains a subset of it). The confidence variable (ST37Q05) asked students how confident they were in solving an equation like 3x+5=17, where 1=Very Confident and 4=Not at all Confident. Make sure to change it to a continuous, numeric variable if it is not already so.
+
+Model 1: PV1MATH = ESCS + FEMALE + LANG + ENJOY
+
+Model 2: PV1MATH = ESCS + FEMALE + LANG + ENJOY + CONFIDENCE
+
+In R, you have to do a couple of things first. In order to compare the models, you have to be using the same number of people in each one (something SPSS does in the background). So, you first have to create a subset of the data for just the set of variables you will be using, and then remove all the rows with missing data in them, like this, using the dplyr package (I called my dataset "pisa" so swap that out with whatever you called yours):
+
+pisa2<-dplyr::select(pisa,PV1MATH,ESCS,FEMALE,LANG,ST29Q04,ST37Q05)
+
+Then call the names(pisa2) function to check that it subset correctly. Then, remove all NAs: pisa2<-na.omit(pisa2)
+
+Then you can store the two models (for instance just store them into model1 and model2). Then you can use the anova() function to compare the models and the tab_model() function from sjPlots will give you a nice comparison table combining results from both models and allowing you to see all the same information as in SPSS (albeit in slightly different places).
+
+anova(model1, model2)
+
+tab_model(model1, model2)
+
+**ANSWER THE QUESTION**: Is model 2 better? How do you know?
+
+Second, use the stepwise function to compare iterative sets of nested, hierarchical models and determine which one you think might be best. (the model to start with should be the one that includes all the variables, including confidence; model 2 from above).
+
+In R, first install the package "olsrr", and then create the model that includes all the variables (perhaps you store it as model3). Then run the function: ols_step_both_p(model3,pent=.05,prem=.10). pent=.05 means add if p<.05 and prem=.10 means remove if p>.10 (these are the same as the default specs used by SPSS). This will give you just simple output showing you the change in R2, and which variable was added to the previous model at each step. You can ignore all columns to the right of Adjusted R2. To get the full information for every different model, add details=TRUE to the function: ols_step_both_p(model3,pent=.05,prem=.10,details=TRUE). 
+
+Note that this almost reproduces the SPSS output. You do not, however, get the same comparison across models (e.g., change in F with associated p-value). To get that, you would have to create each model on your own and use anova() to compare across them. I am not going to make you do that, however.
+
+**ANSWER THE QUESTION**: Which model do you think might be best? What makes you say so?
+
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(ppcor)
+library(tidyverse)
+library(rio)
+library(sjPlot)
+library(olsrr)
+library(MASS)
+
+# Import
+pisa <- import("../data/2012 PISA multiple countries selected variables.sav") %>%
+  as_tibble
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+## Recode Data
+
+First, I recoded the data to facilitate coding and interpretation.
+
+```{r}
+# Rename pisa
+pisa_1 <- pisa %>%
+  rename(country = CNT, language = ST25Q01, enjoy_math = ST29Q04,
+         gender = ST04Q01, math_career = ST48Q05, applied_math = ST76Q01,
+         confidence = ST37Q05, math_score = PV1MATH, ses = ESCS)
+
+# Recode values
+pisa_2 <- pisa_1 %>%
+  mutate(
+    # 0 = same; 1 = different
+    language = recode(language, `1` = 0, `2` = 1),
+    # 0 = male; 1 = female
+    gender = recode(gender, `1` = 0, `2` = 1),
+    # Recode enjoy math so increasing numbers mean increased enjoyment
+    enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1),
+    # Recode confidence so increasing numbers mean increased confidence
+    confidence = recode(confidence, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
+  )
+pisa_2
+```
+
+## Assumption Checking
+
+Other major assumptions (e.g., normality, linearity) were assumed met since we have worked with this dataset several times before.
+
+### Collinearity
+
+Collinearity is a subset of multicollinearity applied to two predictors (Field et al., 2012). Multicollinearity occurs when two or more predictors are highly correlated within a regression model. As values of collinearity increase, problems are introduced into the model, such as:
+
+* unstable beta weights, which might fit the sample but not represent the population;
+* less contribution to multiple correlation (i.e., *R*) and variance explained because collinear variables share too much common variance; and
+* difficulty assessing which predictors are most important.
+
+First, we need to specify the model.
+
+```{r}
+# Create the model
+model <- lm(math_score ~ ses + gender + language + enjoy_math, data = pisa_2)
+```
+
+The variance inflation factor (VIF) is a measure of "whether a predictor has a strong linear relationship with other predictor(s)" (Field et al., 2012, p. 276). Values of 10 are problematic. If the average VIF is greater than 1, then multicollinearity is likely a problem. 
+
+Tolerance, according to Field and colleagues, is the reciprocal of VIF. Problems occurs when tolerance is less than 0.1 and multicollinearity is more likely a problem when tolerance is less than 0.2.
+
+```{r}
+# Check the variance inflation factor (VIF)
+vif(model)
+
+# Average VIF
+mean(vif(model))
+
+# Tolerance
+1 / vif(model)
+```
+
+None of the above values reached the thresholds suggested by Field et al. (2012), therefore multicollinearity is likely not a problem. The average VIF is barely greater than 1.
+
+## Part Correlations
+
+A part correlation (i.e., a semi-partial correlation) is the *unique* correlation after overlapping association between two variables is removed. Conceptually, the procedure carves out a "part" of the multiple correlation coefficient; when the part correlation is squared, it carves out the variance explained (i.e., the multiple R^2) by the unique predictor.
+
+Partial is like a relative frequency. It is out of 100% of multiple R^2. 
+
+Whereas the part correlation carves out a part of the multiple R^2. For example, if the R^2 is 0.241 and the part correlation for SES is .483, then the squared value of the part correlation is 0.231, which is in the same units as multiple R^2. 
+
+```{r}
+# Select the variables in the model
+pisa_3 <- pisa_2 %>%
+  select(-country, -math_career, -applied_math, -confidence)
+
+# Calculate semi-partial correlation (i.e., part)
+# Remove missing values
+part <- spcor(na.omit(as.data.frame(pisa_3)), method = "pearson")
+part
+```
+
+## Model Comparison
+
+First, we must construct the models to compare. The models must have the same number of participants.
+
+```{r}
+# Select variables of interest
+pisa_compare <- pisa_2 %>%
+  select(math_score, ses, gender, language, enjoy_math, confidence)
+
+# Remove missing values
+pisa_compare_1 <- na.omit(pisa_compare)
+
+# Model 1: PV1MATH = ESCS + FEMALE + LANG + ENJOY
+model_1 <- lm(math_score ~ ses + gender + language + enjoy_math, 
+              data = pisa_compare_1)
+
+# Model 2: PV1MATH = ESCS + FEMALE + LANG + ENJOY + CONFIDENCE
+model_2 <- lm(math_score ~ ses + gender + language + enjoy_math + confidence, 
+              data = pisa_compare_1)
+```
+
+Now we can compare the models.
+
+```{r}
+# Are the models significantly different from one another?
+anova(model_1, model_2)
+```
+
+Find the adjusted multiple R-squared, but do not print the results due to a formatting issue.
+
+```{r results='hide'}
+# Show table in R studio but not in the Word document
+tab_model(model_1, model_2)
+```
+
+## Stepwise Multiple Regression
+
+Now we compared the models using iterations. 
+
+```{r error = TRUE}
+# Construct the model
+model_3 <- lm(math_score ~ ., data = pisa_compare_1)
+
+# Perform the stepwise multiple regression
+ols_step_both_p(model_3, pent = .05, prem = .10)
+```
+
+Since there was an error in the command from *olsrr*, I [used a function](http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/) from the *MASS* package. I chose "backward" stepwise regression since it started with the full model (Field et al., 2012) and for the ease of interpretation. 
+
+I consulted [this resource to interpret the Akaike information criterion (AIC)](https://stats.stackexchange.com/questions/347652/default-stepaic-in-r/347655).
+
+```{r}
+# Stepwise regression model from MASS
+step_model <- stepAIC(model_3, direction = "backward")
+summary(step_model)
+
+# Stepwise regression model from stats
+step(model_3)
+```
+
+# Interpretation
+
+```{r}
+# Summarize the model
+summary(model)
+
+# Confidence intervals
+confint(model)
+
+# Partial correlations - ses
+round(part$estimate[2,1]^2, 4) * 100
+
+# Partial correlations - language
+round(part$estimate[3,1]^2, 4) * 100
+
+# Partial correlations - enjoy_math
+round(part$estimate[4,1]^2, 4) * 100
+
+# Partial correlations - gender
+round(part$estimate[5,1]^2, 4) * 100
+```
+
+Results from the multiple regression were significant, *F*(4, 41,676) = 3,304, *p* < .001, and the model explained 24.07% of the variance in math achievement. All of the variables were significant predictors. Socioeconomic status (*t* = 113.05, *p* < .001) significantly contributed to the variance in math achievement, indicating that for every one unit increase in standardized socioeconomic status, a student's score on the math achievement assessment would increase by 36.5 points (95% CI [35.87, 37.13]). Gender (*t* = 9.08, *p* < .001) and language (*t* = 10.06, *p* < .001) were also significant predictors, but the practical significance was limited: being female (versus male) was associated with a 7.28 point increase in math achievement (95% CI [5.71, 8.85]) and having a native language that was different from the test (versus the same) was associated with a 10.06 point increase in math achievement (95% CI [7.39, 12.73]). Finally, enjoyment of math exhibited a significant relationship with math achievement (*t* = 16.15, *p* < .001), indicating that participants tended to score 7.15 points higher (95% CI [6.28, 8.05]) for every one unit increase in math enjoyment. Again, math enjoyment is not considered practically significant given the scale of math achievement. 
+
+Part correlations were conducted to examine the unique contributions to the overall variance in math scores. Part correlations were squared to determine the unique variance. Results indicated that standardized socioeconomic status explained `r round(part$estimate[2,1]^2, 4) * 100`% of the variance in math achievement, speaking a language different from the test explained `r round(part$estimate[3,1]^2, 4) * 100`%, student enjoyment of math explained `r round(part$estimate[4,1]^2, 4) * 100`%, and being female explained `r round(part$estimate[5,1]^2, 4) * 100`%. Therefore, only socioeconomic status explained a meaningful amount of the variance in math achievement. 
+
+## Model Comparison: Is model 2 better? How do you know?
+
+Model 2 is significantly better than model 1, *F*(1, 41,338) = 4,564.5, *p* < .001. The multiple $R^2$ increased from .241 to .317, indicating the the new model explained an additional 7.6% of the variance in math scores (i.e., .317 - .241). This seems meaningful since the confidence variable predicts a 33.37 point increase in math scores for every one unit increase in confidence. 
+
+## Stepwise Hierachical Regression: Which model do you think might be best? What makes you say so?
+
+A lower AIC is ideal (Field et al., 2012). The stepwise regression model with the lowest AIC (359,485) is the maximal model (i.e., the model [with all predictor variables](https://stats.stackexchange.com/questions/347652/default-stepaic-in-r/347655) included). However, the maximal model is only marginally better than a model without the enjoy math variable (AIC = 359,500). Removing either the confidence in math (AIC = 363,813) or the standardized SES (AIC = 367,899) results in the poorest prediction as evidenced by the larger AIC values. Strictly speaking, we should retain the maximal model. However, in practice, the maximal model may not add much meaningful variance over regression models that exclude variables like enjoy math or language given that the changes in the AIC are less than .006% (i.e., 1 - 359,485 / 359,509).
+
+# References
+
+Field, A., J. Miles, & Z. Field. (2012). *Discovering statistics using R*. SAGE Publications Ltd.
