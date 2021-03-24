@@ -1,0 +1,214 @@
+---
+title: "Assignment 4.5"
+author: "Cory J. Cascalheira"
+date: "03/24/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>
+
+**Important Note**: I retained information from the previous assignments given that we are building upon each step to create a more complex multiple regression model. Answers to the current assignment appear at the bottom of this document. 
+
+# Assignment Instructions
+
+Question: Do males and females differ in their confidence in math and does this have different impacts on their math achievement?
+
+For this time around, we are going to add the applied math variable to the set of predictors as well. The applied math variable might be referred to as "opportunity to learn" (OTL) because it asked students how frequently they experienced responding to applied math tasks in their classroom (1=frequently,2=sometimes,3=rarely,4=never). (we are adding this variable now, but will not pay attention to it much at the moment, but I want you to be familiar with it because it will appear in your midterm).
+
+To understand if gender interacts with confidence, first create the interaction term.
+
+IN R: This is a bit more simple. create each model separately and store them
+
+model1<-lm(PV1MATH~ESCS+CONF+FEMALE+ENJOY+LANG+OTL, [put whatever your dataset is named here])
+
+model2<-lm(PV1MATH~ESCS+CONF+FEMALE+ENJOY+LANG+OTL+FEMALE*CONF, [put whatever your dataset is named here])
+
+To compare their R2 values, look at the summary of each model separately. To look at whether model 2 is statistically significantly improved over model 1, run anova(model1,model2). To get a nice readout of the comparison of each model, load the sjPlot library, and run tab_model(model1,model2). By the way, R outputs interaction variables by naming them FEMALE:CONF (the colon indicating that the two are multiplied together).
+
+**Answer these questions**:
+
+1. Does adding the interaction term (FEMALE*CONFIDENCE) statistically significantly improve the model?
+
+2. Does including the interaction term cause any multicollinearity? If so, what would your recommendation be to do to fix it?
+
+3. Regardless of whether including the term matters, interpret the interaction term's coefficient (if you have run things correctly, it should be about 6.2467). Make a table like we did in class to help you with this.
+
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(ppcor)
+library(tidyverse)
+library(rio)
+library(sjPlot)
+
+# Import
+pisa <- import("../data/2012 PISA multiple countries selected variables.sav") %>%
+  as_tibble
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+## Recode Data
+
+First, I recoded the data to facilitate coding and interpretation.
+
+```{r}
+# Rename pisa
+pisa_1 <- pisa %>%
+  rename(country = CNT, language = ST25Q01, enjoy_math = ST29Q04,
+         gender = ST04Q01, math_career = ST48Q05, applied_math = ST76Q01,
+         confidence = ST37Q05, math_score = PV1MATH, ses = ESCS)
+
+# Recode values
+pisa_2 <- pisa_1 %>%
+  mutate(
+    # 0 = same; 1 = different
+    language = recode(language, `1` = 0, `2` = 1),
+    # 0 = male; 1 = female
+    gender = recode(gender, `1` = 0, `2` = 1),
+    # Recode enjoy math so increasing numbers mean increased enjoyment
+    enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1),
+    # Recode confidence so increasing numbers mean increased confidence
+    confidence = recode(confidence, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
+  )
+pisa_2
+```
+
+## Assumption Checking
+
+Other major assumptions (e.g., normality, linearity) were assumed met since we have worked with this dataset several times before.
+
+## Model Comparison
+
+First, we must construct the models to compare. The models must have the same number of participants.
+
+```{r}
+# Select variables of interest
+pisa_compare <- pisa_2 %>%
+  select(math_score, ses, gender, language, enjoy_math, confidence, applied_math)
+
+# Remove missing values
+pisa_compare_1 <- na.omit(pisa_compare)
+
+# Model 1
+model_1 <- lm(math_score ~ ses + gender + language + enjoy_math + confidence + applied_math, 
+              data = pisa_compare_1)
+
+# Summarize Model 1
+summary(model_1)
+
+# Model 2
+model_2 <- lm(math_score ~ ses + gender + language + enjoy_math + confidence + applied_math + confidence*gender, 
+              data = pisa_compare_1)
+
+# Summarize Model 2
+summary(model_2)
+```
+
+Adding the interaction term increased the multiple $R^2$ from 32.13% (model 1) to 32.21% (model 2). In other words, the model with the interaction term explained an additional .08% of the variance in math scores.
+
+Now we can compare the models.
+
+```{r}
+# Are the models significantly different from one another?
+anova(model_1, model_2)
+```
+
+Yes, the ANOVA test revealed that the models are significantly different from one another, *F*(1, 20,049) = 22.705, *p* < .001.
+
+Find the adjusted multiple R-squared, but do not print the results due to a formatting issue.
+
+```{r results='hide'}
+# Show table in R studio but not in the Word document
+tab_model(model_1, model_2)
+```
+
+### Collinearity
+
+Collinearity is a subset of multicollinearity applied to two predictors (Field et al., 2012). Multicollinearity occurs when two or more predictors are highly correlated within a regression model. As values of collinearity increase, problems are introduced into the model, such as:
+
+* unstable beta weights, which might fit the sample but not represent the population;
+* less contribution to multiple correlation (i.e., *R*) and variance explained because collinear variables share too much common variance; and
+* difficulty assessing which predictors are most important.
+
+The variance inflation factor (VIF) is a measure of "whether a predictor has a strong linear relationship with other predictor(s)" (Field et al., 2012, p. 276). Values of 10 are problematic. If the average VIF is greater than 1, then multicollinearity is likely a problem. 
+
+Tolerance, according to Field and colleagues, is the reciprocal of VIF. Problems occurs when tolerance is less than 0.1 and multicollinearity is more likely a problem when tolerance is less than 0.2.
+
+Here on the collinearity statistics for model 1.
+
+```{r}
+# Check the variance inflation factor (VIF)
+vif(model_1)
+
+# Average VIF
+mean(vif(model_1))
+
+# Tolerance
+1 / vif(model_1)
+```
+
+None of the above values reached the thresholds suggested by Field et al. (2012), therefore multicollinearity is likely not a problem.
+
+Here are the collinearity statistics for model 2.
+
+```{r}
+# Check the variance inflation factor (VIF)
+vif(model_2)
+
+# Average VIF
+mean(vif(model_2))
+
+# Tolerance
+1 / vif(model_2)
+```
+
+Collinearity is a problem in model 2 because the VIF = 16.95 for gender and VIF = 17.74 for the interaction term; both are greater than the recommended threshold of 10 (Field et al., 2012). The tolerance statistic yields further evidence of collinearity. The tolerance for gender (.059) and the interaction term (.056) are less than 0.1, indicating collinearity. 
+
+# Questions for Assignment 6
+
+## Does adding the interaction term (FEMALE*CONFIDENCE) statistically significantly improve the model?
+
+The ANOVA test revealed that the models are significantly different from one another, *F*(1, 20,049) = 22.705, *p* < .001. Adding the interaction term increased the multiple $R^2$ from 32.13% (model 1) to 32.21% (model 2). In other words, the model with the interaction term explained an additional .08% of the variance in math scores. The interaction term improves the model statistically, but its practical significance is not tenable. Indeed, the statistical significance is likely attributable to the large sample size (i.e., the analysis is overpowered). 
+
+## Does including the interaction term cause any multicollinearity? If so, what would your recommendation be to do to fix it?
+
+Yes. Collinearity is a problem in model 2 because the VIF = 16.95 for gender while the VIF = 17.74 for the interaction term; both are greater than the recommended threshold of 10 (Field et al., 2012). The tolerance statistic yields further evidence of collinearity. The tolerance for gender (.059) and the interaction term (.056) are less than 0.1, indicating collinearity.
+
+Given that the model with the interaction term evinces no practically significant improvement, I would eliminate the interaction term and retain model 1 for the sake parsimony. Another option would be the removal of the gender variable. If I were interested in the interaction of gender and confidence for theoretical reasons, then there may be an argument for this second recommendation. 
+
+## Regardless of whether including the term matters, interpret the interaction term's coefficient (if you have run things correctly, it should be about 6.2467). Make a table like we did in class to help you with this.
+
+Model 2 is given by the following equation:
+
+MathScore = 360.40 + (31.72 * SES) + (-12.60 * Gender) + (6.68 * Language) + (0.57 * EnjoyMath) + (29.28 * Confidence) + (4.01 * AppliedMath) + (6.25 * Gender * Confidence)
+
+```{r}
+
+```
+
+# References
+
+Field, A., J. Miles, & Z. Field. (2012). *Discovering statistics using R*. SAGE Publications Ltd.
