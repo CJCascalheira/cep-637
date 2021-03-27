@@ -71,7 +71,7 @@ pisa_2 <- pisa_1 %>%
     # 0 = same; 1 = different
     language = recode(language, `1` = 0, `2` = 1),
     # 0 = male; 1 = female
-    gender = recode(gender, `1` = 0, `2` = 1),
+    gender = recode(gender, `1` = 1, `2` = 0),
     # Recode enjoy math so increasing numbers mean increased enjoyment
     enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
   )

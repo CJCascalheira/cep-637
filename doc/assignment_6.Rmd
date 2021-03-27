@@ -87,7 +87,7 @@ pisa_2 <- pisa_1 %>%
     # 0 = same; 1 = different
     language = recode(language, `1` = 0, `2` = 1),
     # 0 = male; 1 = female
-    gender = recode(gender, `1` = 0, `2` = 1),
+    gender = recode(gender, `1` = 1, `2` = 0),
     # Recode enjoy math so increasing numbers mean increased enjoyment
     enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1),
     # Recode confidence so increasing numbers mean increased confidence
@@ -205,8 +205,18 @@ Model 2 is given by the following equation:
 
 MathScore = 360.40 + (31.72 * SES) + (-12.60 * Gender) + (6.68 * Language) + (0.57 * EnjoyMath) + (29.28 * Confidence) + (4.01 * AppliedMath) + (6.25 * Gender * Confidence)
 
-```{r}
+Note that I recoded confidence such that 1 = low confidence and 4 = high confidence. 
 
+```{r}
+# Pull the essential variables
+variables <- model_2$coefficients[c(3,6,8)]
+variables
+
+data.frame(
+  Confidence = c(1, 2, 3, 4),
+  Male = c(0, 0, 0, 0),
+  Female = c(0, 0, 0, 0)
+)
 ```
 
 # References
