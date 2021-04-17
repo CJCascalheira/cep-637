@@ -87,11 +87,12 @@ pisa_2 <- pisa_1 %>%
     # 0 = same; 1 = different
     language = recode(language, `1` = 0, `2` = 1),
     # 0 = male; 1 = female
-    gender = recode(gender, `1` = 1, `2` = 0),
+    gender = recode(gender, `1` = 1, `2` = 0)#,
+    # Had to remove these recoded variables because they affect the VIF
     # Recode enjoy math so increasing numbers mean increased enjoyment
-    enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1),
+    #enjoy_math = recode(enjoy_math, `1` = 4, `2` = 3, `3` = 2, `4` = 1),
     # Recode confidence so increasing numbers mean increased confidence
-    confidence = recode(confidence, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
+    #confidence = recode(confidence, `1` = 4, `2` = 3, `3` = 2, `4` = 1)
   )
 pisa_2
 ```
@@ -195,6 +196,10 @@ The ANOVA test revealed that the models are significantly different from one ano
 
 ## Does including the interaction term cause any multicollinearity? If so, what would your recommendation be to do to fix it?
 
+Without recoded variables of confidence and applied math, the answer is no! I need to discuss this problem with Chris. I think the issue is that, by recoding, I was basically treating the levels of confidence and applied math as reversed scored items, which does not make sense and changes the meaning of the variables. I was trying to fix the directionality so that higher scores indicated more confidence but, instead, created an issue. 
+
+Here is my previous answer for sake of completeness:
+
 Yes. Collinearity is a problem in model 2 because the VIF = 16.95 for gender while the VIF = 17.74 for the interaction term; both are greater than the recommended threshold of 10 (Field et al., 2012). The tolerance statistic yields further evidence of collinearity. The tolerance for gender (.059) and the interaction term (.056) are less than 0.1, indicating collinearity.
 
 Given that the model with the interaction term evinces no practically significant improvement, I would eliminate the interaction term and retain model 1 for the sake parsimony. Another option would be the removal of the gender variable. If I were interested in the interaction of gender and confidence for theoretical reasons, then there may be an argument for this second recommendation. 
@@ -205,7 +210,7 @@ Model 2 is given by the following equation:
 
 MathScore = 360.40 + (31.72 * SES) + (-12.60 * Gender) + (6.68 * Language) + (0.57 * EnjoyMath) + (29.28 * Confidence) + (4.01 * AppliedMath) + (6.25 * Gender * Confidence)
 
-Note that I recoded confidence such that 1 = low confidence and 4 = high confidence. 
+Note that I recoded confidence such that 1 = low confidence and 4 = high confidence. Note that the table below include gender even though gender was not a significant predictor in the model (which I would remove prior to interpreting the interaction coefficient for publication). 
 
 ```{r}
 # Pull the essential variables
@@ -213,11 +218,16 @@ variables <- model_2$coefficients[c(3,6,8)]
 variables
 
 data.frame(
-  Confidence = c(1, 2, 3, 4),
-  Male = c(0, 0, 0, 0),
-  Female = c(0, 0, 0, 0)
+  Confidence = c("Very", "Confident", "Less", "Not very"),
+  Male = c(variables[2] * 1, variables[2] * 2, variables[2] * 3, variables[2] * 4),
+  Female = c(variables[1] + (variables[2] * 1) + (variables[3] * 1 * 1), 
+             variables[1] + (variables[2] * 2) + (variables[3] * 1 * 2), 
+             variables[1] + (variables[2] * 3) + (variables[3] * 1 * 3), 
+             variables[1] + (variables[2] * 4) + (variables[3] * 1 * 4))
 )
 ```
+
+In summary, confidence matters more for male students than for female students because greater confidence increases male math scores more than it increases female math scores.
 
 # References
 

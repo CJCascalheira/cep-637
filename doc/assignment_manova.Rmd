@@ -1,0 +1,141 @@
+---
+title: "MANOVA"
+author: "Cory J. Cascalheira"
+date: "04/17/2021"
+output: 
+  word_document:
+    reference_docx: style_reference.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>
+
+**Important Note**: This is a tutorial on how to conduct a MANOVA according to Dr. Chris Engledowl.
+
+# Establish the Work Environment
+
+Load all the dependencies and import the data.
+
+```{r}
+# Dependencies
+library(car)
+library(psych)
+library(tidyverse)
+library(rio)
+library(heplots) #(for getting the partial eta squared statistic)
+library(micompr) #(to help checking assumptions of multivariate normality [SPSS can't do this but R can :)] and homogeneity of covariances)
+library(MVN) #(needed for micompr, but also helpful on its own)
+library(biotools) #(needed for micompr)
+
+# Import
+pisa <- import("../data/2012PISA_USA_OTL-CLE v2.sav") %>%
+  as_tibble
+
+# Construct the APA theme for plots
+# Construct the APA theme
+apa_theme <- theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        plot.title = element_text(hjust = 0.5),
+        text = element_text(size = 12, family = "sans"),
+        axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+# Testing Assumptions
+
+To get started with the assumptions, you will have run separate functions to look at the descriptives (use describeBy) and histograms for each of the two DVs (PV1MACC and PV1MACS--algebra and geometry). Also, you might find this code handy for adding the normal curve over the top of the histograms (I stored my imported data into the word pisa).
+
+```{r}
+# adding the aes(y=..density..) and the stat_function
+# draws the normal curve over the histogram for comparison
+ggplot(pisa, aes(PV1MACC)) +
+  geom_histogram(aes(y =..density..), color="black", fill="white")+
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(pisa$PV1MACC), 
+                            sd = sd(pisa$PV1MACC)))+
+  facet_grid(. ~FEMALE) + # creates separate histograms for males/females
+  theme_bw()
+```
+
+To test for multivariate normality, start by using the MVN package. This function requires you to call the column numbers for the two DVs rather than naming them using the $. This code will spit out some normality tests (by default it also gives you the shapiro wilk test of normality for each DV separately, but remember that this test is highly sensitive to large sample sizes so you can ignore the results of that). 
+
+The first result is for one of 4 different statistics the function can use to test for multivariate normality. I suggest using the additional lines of code to get the other ones. Look across all 4 to see if there is consistency in whether there is multivariate normality—I have read that it is usually the case that all 4 won't match, so use that information along with the 2 plots that are produced. 
+
+The first plot this code produces is a multivariate QQ plot (interpreted the same way as the other QQ plots we've looked at—if things stay on the line, that is evidence of normality). 
+
+The second plot uses what is called Mahalanobis distances in order to determine if there are multivariate outliers. Think of Mahalanobis distances as Z-scores at the multivariate level (the level that combines both DVs simultaneously). That plot will tell you exactly how many outliers there are, and will show them to the right of the cut-point (the vertical line it draws on the plot).
+
+```{r}
+# Check multivariate normality 
+mvn(pisa[,2:3],
+    multivariatePlot = "qq", # qqplot
+    multivariateOutlierMethod = "quan", # uses mahalanobis
+    )
+
+#checking other multivariate normality statistics
+mvn(pisa[,2:3],mvnTest="hz")
+mvn(pisa[,2:3],mvnTest="dh")
+mvn(pisa[,2:3],mvnTest="energy")
+```
+
+To continue checking normality as well as to check for homogeneity of covariances (you should also check for homogeneity of variances using leveneTest from the car package and you will need to run it twice—once for each DV), use the following function from the micompr package (which uses information from the MVN and the biotools packages). 
+
+However, before you run it, you need to make FEMALE a factor variable (it is a numeric one, and this function won't run correctly with a numeric grouping variable). As a reminder, p < .05 means not normal, or not homogenous covariances, so you want to see p > .05 on these.
+
+You also need to remove all NAs from the data in order to run it correctly, and #since this is the only time this is necessary, I just saved the no NA version into a new variable.
+
+```{r}
+# Recode to factor
+pisa$FEMALE <- as.factor(pisa$FEMALE)
+
+# Remove missing values
+pisa2 <- na.omit(pisa[, c(2:3,5)])
+```
+
+Since you will already have multivariate normality results, instead, use this function from the biotools package to test for homogeneity of covariances.
+
+```{r}
+boxM(pisa2[, 1:2], pisa2$FEMALE)
+```
+
+You will also need to check that there is a linear relationship, which you can do visually by just looking at a scatterplot.
+
+```{r}
+# Check of linearity
+ggplot(pisa,aes(x=PV1MACC,y=PV1MACS))+
+  geom_point()
+
+# Check for linearity by group
+ggplot(pisa,aes(x=PV1MACC,y=PV1MACS))+
+  geom_point()+
+  facet_grid(.~FEMALE)
+```
+
+And then check for possible multicollinearity by looking at the correlation between the DVs:
+
+```{r}
+cor(pisa$PV1MACC,pisa$PV1MACS)
+```
+THEN, to run the actual MANOVA, you can use base R easily to do this (except for the eta squared that uses the heplots package). Eta Squared is interpreted exactly the same way as R2. Note the use of the cbind() function in the manova() function. This is because the DVs are basically a matrix, and so you have to pull the two columns out, and put them together as one object to enter it into the function.
+
+```{r}
+# save manova model
+m1 <- manova(cbind(pisa$PV1MACC, pisa$PV1MACS) ~ pisa$FEMALE)
+
+# get full results, specifying Wilks Lambda (pillai is default if left blank)
+summary(m1, test = "Wilks")
+
+# get eta squared with heplots package
+etasq(m1)
+
+# follow-up anovas
+summary.aov(m1)
+```
+
